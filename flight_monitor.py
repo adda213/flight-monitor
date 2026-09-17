@@ -129,7 +129,7 @@ def save_json(path: Path, value: Any) -> None:
 
 
 def validate_config(config: dict[str, Any]) -> None:
-    required = ("trips", "origins", "destinations", "passengers", "currency")
+    required = ("trips", "origin_groups", "destinations", "passengers", "currency")
     missing = [key for key in required if key not in config]
     if missing:
         raise ValueError("Clés de configuration manquantes : " + ", ".join(missing))
@@ -139,6 +139,13 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ValueError("L'âge configuré de l'enfant doit être 3 ans.")
     if not config.get("direct_flights_only", False):
         raise ValueError("direct_flights_only doit rester à true.")
+    if len(config["origin_groups"]) != 3:
+        raise ValueError("La configuration doit contenir exactement trois groupes de départ.")
+    for group in config["origin_groups"]:
+        if not group.get("name") or not group.get("origins"):
+            raise ValueError("Chaque groupe de départ doit avoir un nom et des aéroports.")
+        if any(code == "PAR" or len(code) != 3 for code in group["origins"]):
+            raise ValueError("Utilise uniquement des codes d'aéroport IATA précis ; PAR est interdit.")
     for trip in config["trips"]:
         departure = datetime.strptime(trip["departure_date"], "%Y-%m-%d").date()
         returning = datetime.strptime(trip["return_date"], "%Y-%m-%d").date()
@@ -148,6 +155,24 @@ def validate_config(config: dict[str, Any]) -> None:
 
 def is_direct_outbound(raw_offer: dict[str, Any]) -> bool:
     return len(raw_offer.get("flights", [])) == 1 and not raw_offer.get("layovers")
+
+
+def select_origin_group(
+    config: dict[str, Any],
+    now: datetime,
+    forced_index: str | None = None,
+) -> dict[str, Any]:
+    groups = config["origin_groups"]
+    if forced_index is not None:
+        index = int(forced_index)
+        if index < 0 or index >= len(groups):
+            raise ValueError("ORIGIN_GROUP_INDEX doit valoir 0, 1 ou 2.")
+        return groups[index]
+    if now.hour < 9:
+        return groups[0]
+    if now.hour < 17:
+        return groups[1]
+    return groups[2]
 
 
 def parse_offer(
@@ -236,6 +261,7 @@ def render_report(
     errors: list[str],
     history: dict[str, Any],
     now: datetime,
+    origin_group: dict[str, Any],
 ) -> str:
     passenger_count = config["passengers"]["adults"] + config["passengers"]["children"]
     previous = history.get("latest", {})
@@ -292,7 +318,7 @@ th,td{{padding:13px 9px;text-align:left;border-top:1px solid #e8edf4;vertical-al
 .empty{{margin-top:16px;background:#fff8e6;color:#774d00;padding:14px;border-radius:10px}}.errors{{border-left:5px solid #e89023}}.errors li{{margin:6px 0;font-size:13px}}.footer{{text-align:center;color:#7b8798;font-size:12px;margin:22px}}
 @media(max-width:650px){{.container{{padding:10px}}.hero,section{{border-radius:10px;padding:16px}}th,td{{font-size:12px}}}}
 </style></head><body><div class="container">
-<div class="hero"><h1>✈ Surveillance vols France → Algérie</h1><p>2 adultes + 1 enfant de 3 ans · Vols directs · Prix indicatifs pour 3 voyageurs</p><p>Relevé du {now.strftime('%d/%m/%Y à %H:%M')} (heure de Paris)</p></div>
+<div class="hero"><h1>✈ Surveillance vols France → Algérie</h1><p>2 adultes + 1 enfant de 3 ans · Vols directs · Prix indicatifs pour 3 voyageurs</p><p>Relevé du {now.strftime('%d/%m/%Y à %H:%M')} (heure de Paris)</p><p>Départs contrôlés : {html.escape(origin_group['name'])} — {html.escape(', '.join(origin_group['origins']))}</p></div>
 {''.join(sections)}{error_block}
 <p class="footer">Source : résultats Google Flights obtenus via SerpApi. Les prix, bagages et disponibilités peuvent changer. L’horaire du retour doit être sélectionné et confirmé sur Google Flights avant achat.</p>
 </div></body></html>"""
@@ -358,6 +384,7 @@ def collect_offers(
     config: dict[str, Any],
     client: SerpApiClient | None,
     demo: bool,
+    origins: list[str],
 ) -> tuple[dict[str, list[Offer]], list[str]]:
     grouped: dict[str, list[Offer]] = {trip["name"]: [] for trip in config["trips"]}
     errors: list[str] = []
@@ -369,7 +396,7 @@ def collect_offers(
             else:
                 assert client is not None
                 payload = client.search(
-                    origins=config["origins"],
+                    origins=origins,
                     destinations=config["destinations"],
                     departure_date=trip["departure_date"],
                     return_date=trip["return_date"],
@@ -490,10 +517,32 @@ def main() -> int:
     validate_config(config)
     history = load_json(args.history, {}) or {}
     now = datetime.now(PARIS_TZ)
+    origin_group = select_origin_group(
+        config,
+        now,
+        os.getenv("ORIGIN_GROUP_INDEX"),
+    )
+    logging.info(
+        "Groupe de départ sélectionné : %s (%s)",
+        origin_group["name"],
+        ", ".join(origin_group["origins"]),
+    )
 
     client = None if args.demo else SerpApiClient(require_env("SERPAPI_KEY"))
-    offers_by_trip, errors = collect_offers(config, client, args.demo)
-    report = render_report(config, offers_by_trip, errors, history, now)
+    offers_by_trip, errors = collect_offers(
+        config,
+        client,
+        args.demo,
+        origin_group["origins"],
+    )
+    report = render_report(
+        config,
+        offers_by_trip,
+        errors,
+        history,
+        now,
+        origin_group,
+    )
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(report, encoding="utf-8")
     save_json(args.history, updated_history(history, offers_by_trip, now))

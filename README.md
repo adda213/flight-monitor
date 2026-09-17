@@ -11,16 +11,24 @@ Ce projet cherche sur Google Flights, par l'intermédiaire de SerpApi, des aller
 
 Il s'exécute sur GitHub Actions à **06:00, 12:00 et 21:00, heure de Paris**, génère un rapport HTML et l'envoie par e-mail avec Brevo.
 
-## Consommation du quota gratuit
+## Répartition des aéroports et quota gratuit
 
-Tous les aéroports français sont regroupés dans une seule requête SerpApi par voyage. Le script effectue donc :
+Google Flights peut refuser une recherche contenant trop de départs simultanés. Les aéroports sont donc répartis automatiquement sur les trois passages :
+
+| Passage | Aéroports contrôlés |
+|---|---|
+| 06h | CDG, ORY, BVA, LIL |
+| 12h | LYS, MRS, NCE, MPL |
+| 21h | TLS, BOD, NTE, SXB, ETZ |
+
+Le code métropolitain `PAR` n'est pas utilisé : SerpApi attend des codes d'aéroport précis. Chaque aéroport est contrôlé une fois par jour et chaque passage effectue une seule recherche par voyage :
 
 ```text
 2 voyages × 3 passages par jour × 30 jours
 = environ 180 recherches par mois
 ```
 
-L'offre gratuite de SerpApi comprend actuellement 250 recherches par mois. Les résultats identiques servis depuis le cache SerpApi peuvent même ne pas être décomptés.
+L'offre gratuite de SerpApi comprend actuellement 250 recherches par mois. Les recherches échouées et les résultats identiques servis depuis le cache ne sont normalement pas décomptés.
 
 Pour rester sous ce quota, le script ne demande pas les détails de chaque vol retour. Le rapport affiche :
 
@@ -120,9 +128,17 @@ $env:SERPAPI_KEY="..."
 python flight_monitor.py --no-email
 ```
 
+Pour forcer un groupe lors d'un lancement manuel :
+
+```powershell
+# 0 = Paris/Nord, 1 = Sud-Est, 2 = Ouest/Sud-Ouest/Est
+$env:ORIGIN_GROUP_INDEX="0"
+python flight_monitor.py --no-email
+```
+
 ## Modifier les aéroports ou les dates
 
-Tout se trouve dans `config.json`. Les codes actuels comprennent notamment Paris, Beauvais, Lyon, Marseille, Toulouse, Nice, Montpellier, Bordeaux, Nantes, Lille, Strasbourg et Metz/Nancy.
+Tout se trouve dans `config.json`, notamment dans `origin_groups`. Utilise des codes d'aéroport précis comme `CDG` et `ORY`, jamais le code métropolitain `PAR`.
 
 Les deux éléments de `trips` correspondent à des dates fixes d'aller et de retour.
 

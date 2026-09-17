@@ -47,12 +47,35 @@ class FlightMonitorTests(unittest.TestCase):
 
     def test_only_one_api_call_per_trip(self):
         client = FakeSerpApiClient()
-        grouped, errors = fm.collect_offers(self.config, client, demo=False)
+        origin_group = self.config["origin_groups"][0]
+        grouped, errors = fm.collect_offers(
+            self.config,
+            client,
+            demo=False,
+            origins=origin_group["origins"],
+        )
         self.assertFalse(errors)
         self.assertEqual(len(client.calls), len(self.config["trips"]))
-        self.assertEqual(client.calls[0]["origins"], self.config["origins"])
+        self.assertEqual(client.calls[0]["origins"], ["CDG", "ORY", "BVA", "LIL"])
         self.assertEqual(client.calls[0]["destinations"], ["ALG", "ORN"])
         self.assertTrue(all(grouped.values()))
+
+    def test_origin_groups_follow_paris_schedule(self):
+        timezone = ZoneInfo("Europe/Paris")
+        morning = datetime(2026, 9, 17, 6, 0, tzinfo=timezone)
+        noon = datetime(2026, 9, 17, 12, 0, tzinfo=timezone)
+        evening = datetime(2026, 9, 17, 21, 0, tzinfo=timezone)
+        self.assertIn("CDG", fm.select_origin_group(self.config, morning)["origins"])
+        self.assertIn("MRS", fm.select_origin_group(self.config, noon)["origins"])
+        self.assertIn("TLS", fm.select_origin_group(self.config, evening)["origins"])
+
+    def test_par_metropolitan_code_is_not_present(self):
+        all_origins = [
+            code
+            for group in self.config["origin_groups"]
+            for code in group["origins"]
+        ]
+        self.assertNotIn("PAR", all_origins)
 
     def test_history_keeps_record_low(self):
         old = {

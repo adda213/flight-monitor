@@ -11,19 +11,19 @@
       "return_date": "2027-01-02"
     }
   ],
-  "origins": [
-    "PAR",
-    "BVA",
-    "LYS",
-    "MRS",
-    "TLS",
-    "NCE",
-    "MPL",
-    "BOD",
-    "NTE",
-    "LIL",
-    "SXB",
-    "ETZ"
+  "origin_groups": [
+    {
+      "name": "06h — Paris et Nord",
+      "origins": ["CDG", "ORY", "BVA", "LIL"]
+    },
+    {
+      "name": "12h — Sud-Est",
+      "origins": ["LYS", "MRS", "NCE", "MPL"]
+    },
+    {
+      "name": "21h — Ouest, Sud-Ouest et Est",
+      "origins": ["TLS", "BOD", "NTE", "SXB", "ETZ"]
+    }
   ],
   "destinations": [
     "ALG",
