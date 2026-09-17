@@ -1,0 +1,40 @@
+{
+  "trips": [
+    {
+      "name": "Vacances d’octobre",
+      "departure_date": "2026-10-17",
+      "return_date": "2026-10-31"
+    },
+    {
+      "name": "Vacances de fin d’année",
+      "departure_date": "2026-12-19",
+      "return_date": "2027-01-02"
+    }
+  ],
+  "origins": [
+    "PAR",
+    "BVA",
+    "LYS",
+    "MRS",
+    "TLS",
+    "NCE",
+    "MPL",
+    "BOD",
+    "NTE",
+    "LIL",
+    "SXB",
+    "ETZ"
+  ],
+  "destinations": [
+    "ALG",
+    "ORN"
+  ],
+  "passengers": {
+    "adults": 2,
+    "children": 1,
+    "child_age": 3
+  },
+  "direct_flights_only": true,
+  "currency": "EUR",
+  "max_results_per_trip": 10
+}

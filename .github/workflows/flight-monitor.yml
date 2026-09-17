@@ -1,0 +1,65 @@
+name: Surveillance des prix des vols
+
+on:
+  schedule:
+    - cron: "0 6,12,21 * * *"
+      timezone: "Europe/Paris"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flight-price-monitor
+  cancel-in-progress: false
+
+jobs:
+  search-flights:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Récupérer le projet
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installer les dépendances
+        run: pip install -r requirements.txt
+
+      - name: Restaurer l’historique des prix
+        uses: actions/cache/restore@v4
+        with:
+          path: data/prices_history.json
+          key: flight-history-${{ github.run_id }}
+          restore-keys: |
+            flight-history-
+
+      - name: Chercher les vols et envoyer le rapport
+        env:
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_FROM_NAME: Alerte vols
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: python flight_monitor.py
+
+      - name: Sauvegarder l’historique des prix
+        if: always() && hashFiles('data/prices_history.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: data/prices_history.json
+          key: flight-history-${{ github.run_id }}
+
+      - name: Conserver le dernier rapport dans GitHub
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapport-vols-${{ github.run_id }}
+          path: reports/latest.html
+          if-no-files-found: warn
+          retention-days: 7
