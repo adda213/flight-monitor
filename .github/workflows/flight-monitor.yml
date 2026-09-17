@@ -2,7 +2,7 @@ name: Surveillance des prix des vols
 
 on:
   schedule:
-    - cron: "0 6,12,21 * * *"
+    - cron: "7 6,12,21 * * *"
       timezone: "Europe/Paris"
   workflow_dispatch:
 
